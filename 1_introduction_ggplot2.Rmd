@@ -1,0 +1,371 @@
+---
+title: 'Introduction to ggplot2: Creating simple publication-quality figures'
+author: "Matthew Castelo"
+date: "June, 2021"
+output:
+  pdf_document:
+    fig_caption: yes
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(formatR)
+library(knitr)
+knitr::opts_chunk$set(tidy = FALSE, 
+                      message = FALSE, warning = FALSE,
+                      out.width = "75%", fig.align = 'center')
+```
+```{r, echo = FALSE}
+#Hidden packages and working directory 
+library(tidyverse)
+library(tableone)
+
+setwd("C:/Users/matth/Documents/R/R code and education/Tutorials/")
+```
+
+This tutorial will introduce ggplot2 and allow you to quickly generate publication-quality figures from clean datasets. The ggplot2 package is extremely flexible and is suitable for a variety of users. From researchers who wish to create clean, high-resolution figures that complement analyses performed in other software, to those wanting to create complex, annotated figures that convey a greater amount of information.   
+
+Some examples of ggplot2 figures are presented below:
+
+```{r, echo=FALSE, out.width="100%", fig.cap="Panelled Kaplan-Meier curves with at-risk tables shown below and annotations."}
+knitr::include_graphics("C:/Users/matth/Documents/R/R code and education/Tutorials/Photos/seer_km_example.png")
+```
+\pagebreak
+```{r, echo=FALSE, out.width="100%", fig.cap="Bar chart showing before/after survey data with annotations."}
+knitr::include_graphics("C:/Users/matth/Documents/R/R code and education/Tutorials/Photos/burnout_before_after.png")
+```
+\pagebreak
+```{r, echo=FALSE, out.width="100%", fig.cap="Complex figure with plots and an inset table."}
+knitr::include_graphics("C:/Users/matth/Documents/R/R code and education/Tutorials/Photos/beacons_cowplot.png")
+```
+\pagebreak
+
+First, you should have R and RStudio installed. Next, install the **tidyverse** package by running the following command:
+
+```{r, eval = FALSE}
+install.packages("tidyverse")
+```
+
+The **tidyverse** package will install a number of smaller packages, including **ggplot2** for plotting, and **dplyr** for data manipulation. Once installed, packages need to be loaded every time RStudio is launched. It is typical to load your required packages and set your working directory in the first code chunk. 
+
+```{r, eval = FALSE}
+library(tidyverse)
+
+#The working directory saves the following path when loading files, saving plots, etc
+setwd("C:/Users/matth/Documents/R/R code and education/Tutorials/")
+```
+
+We will be working with a simulated dataset representing 80 generic cancer patients. The dataset can be loaded directly from GitHub so all the subsequent code will run on your computer. 
+
+```{r}
+url <- "https://raw.githubusercontent.com/mcas-surg/Tutorials/main/Datasets/generic_cancer.csv"
+
+cancer <- read_csv(url)
+```
+
+We now have our dataset saved to the *cancer* object. The dataset can be inspected with some useful functions. `head()` will show by default just the first 5 rows. 
+
+```{r}
+head(cancer)
+```
+
+The `glimpse()` function will show the dimensions of the dataset, each column, and the variable type (numeric, character, etc.).
+
+```{r}
+glimpse(cancer)
+```
+
+It is sometimes helpful to open the dataset in a "spreadsheet" format. This can be accomplished using `View()`.
+
+We note our dataset has 80 observations and 13 variables.
+\pagebreak
+
+```{r, echo = FALSE}
+cancer_no_id <- cancer %>% 
+  dplyr::select(-pt_id)
+
+tab <- print(CreateTableOne(vars = colnames(cancer_no_id), data = cancer),
+             showAllLevels = T, printToggle = FALSE)
+
+kable(tab)
+```
+
+Let's start with a simple scatter plot of age versus tumour size using **ggplot2**. The dataset is passed to ggplot using a pipe (%>%). This symbol links commands and functions to each other, allowing more efficient coding.
+
+A ggplot is build in layers. First we pass the dataset to `ggplot()`, and define our aesthetics. Aesthetics (`aes()`) link variables in our dataset to visual elements on the plot. For example, color, position, size, transparency etc. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size))
+```
+
+This doesn't do much on its own. Now we can add layers. These will automatically inherit the relationships we defined as aesthetics. The layer `geom_point()` will make our scatter plot. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size))+
+  geom_point()
+```
+
+We can manually increase the size of the points and add colour. Let's also change the name of the axes and add a title using `labs()`. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size))+
+  geom_point(size = 2, colour = "darkblue")+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)")
+```
+
+There are many built-in themes for **ggplot2**. The black and white theme `+theme_bw()` is popular, as is the minimal theme `+theme_minimal()`. Note when adding layers to a ggplot, we use a `+` rather than a pipe. Also note the code format. Place each layer on a new line to improve readability.  
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size))+
+  geom_point(size = 2, colour = "darkblue")+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)")+
+  theme_minimal()
+```
+
+There appears to be a weak relationship between smaller tumours and older age. We can add additional information by colouring points by hospital type. This is done in the aesthetics. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size, colour = hospital))+
+  geom_point(size = 2)+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)")+
+  theme_minimal()
+```
+
+A legend is automatically generated, and the default **ggplot2** colours are used. We can change the legend name in `labs()` and the position by manually changing the theme. Let's do that now. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size, colour = hospital))+
+  geom_point(size = 2)+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)",
+       colour = "Hospital type")+
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+
+**tidyverse** contains a useful package called **ggsci**. It contains the colour palettes for several major academic journals (and Star Trek!). The full list of palettes are available here: https://cran.r-project.org/web/packages/ggsci/vignettes/ggsci.html
+
+You should never submit figures with the default **ggplot2** colours as they are highly recognizable. Let's plan to submit to the Lancet. 
+
+```{r}
+library(ggsci)
+
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size, colour = hospital))+
+  geom_point(size = 2)+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)",
+       colour = "Hospital type")+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  scale_colour_lancet()
+```
+
+We can also see it appears the academic hospital treats patients with larger tumours. Let's explore two other categorical variables - sex and tumour grade. By simply switching `colour = hospital` to `colour = male` for example. Remember to change the legend title. 
+
+```{r, echo = FALSE}
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size, colour = male))+
+  geom_point(size = 2)+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)",
+       colour = "Sex")+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  scale_colour_jama()
+
+cancer %>% 
+  ggplot(aes(x = age, y = tumour_size, colour = high_grade))+
+  geom_point(size = 2)+
+  labs(title = "Patient age vs. tumour size",
+       x = "Age (years)",
+       y = "Tumour size (cm)",
+       colour = "High grade tumour")+
+  theme_minimal()+
+  theme(legend.position = "bottom")+
+  scale_colour_nejm()
+```
+
+These relationships might be better expressed as a boxplot. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = tumour_size, fill = hospital))+
+  geom_boxplot()
+```
+
+Note we use `fill = ` rather than `colour = ` as this will only change the line colour rather than fill in the boxplot. By default boxplots are horizontal. We can change this with `+coord_flip()`.
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = tumour_size, fill = hospital))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+Let's make our usual visual changes. We will also remove the gridlines in the background using `theme()`.
+
+```{r}
+cancer %>% 
+  ggplot(aes(x = tumour_size, fill = hospital))+
+  geom_boxplot()+
+  coord_flip()+
+  theme_minimal()+
+  labs(title = "Tumour size by hospital type",
+       x = "Tumour size (cm)",
+       fill = "Hospital type")+
+  theme_minimal()+
+  theme(legend.position = "bottom",
+        panel.grid = element_blank(),
+        axis.text.x = element_blank())+
+  scale_fill_nejm()
+  
+```
+
+There are a few complexities that are important to point out. Because we used the fill aesthetic, we had to change colour to fill in `labs()` and in our custom colour palette. This changes from `scale_colour_nejm()` to `scale_fill_nejm()`. Setting elements of the plot to `= element_blank()` in `theme()` will remove them. Finally, when we flip boxplots, the axis name remains the same (i.e. tumour size is still the x-axis).
+
+Assuming we are happy with the plot, we can save it as a high-quality png file for publication. The `ggsave()` function allows us to manually set the plot size, file type (png, TIFF, etc), and quality (300 dpi is typical for publication). 
+
+```{r, eval = FALSE}
+#If you have not set the working directory, include the full file path
+ggsave("my_plot.png", 
+       dpi = 300, dev = "png",
+       height = 15, width = 15, units = "cm")
+```
+
+Let's explore bar charts. First, showing the number of patients in each hospital type with the new layer `+geom_bar`. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(y = hospital))+
+  geom_bar()
+```
+
+Adding a fill aesthetic showing the number of patients who died vs. survived, and flipping the bars vertical. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(y = hospital, fill = vital_status))+
+  geom_bar()+
+  coord_flip()
+```
+
+The position of the categories can be changed from stacked (default), to dodged. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(y = hospital, fill = vital_status))+
+  geom_bar(position = "dodge")+
+  coord_flip()
+```
+
+Let's improve the overall visuals, as we've seen before. This time we can use the Star Trek Palette, and the black and white theme. We will also put the legend on top. 
+
+```{r}
+cancer %>% 
+  ggplot(aes(y = hospital, fill = vital_status))+
+  geom_bar(position = "dodge")+
+  coord_flip()+
+  theme_bw()+
+  labs(y = "Treating hospital",
+       x = "Number of patients",
+       fill = "Vital status")+
+  scale_fill_startrek()+
+  theme(legend.position = "top",
+        panel.grid = element_blank())
+```
+
+You can assign ggplot code to an object, similar to a dataset. This plot can be used in other tasks, or you can add additional layers to it. Sometimes this can make your code more efficient. For example, the previous plot code can be assigned to the object *plot_1*.
+
+```{r}
+plot_1 <- cancer %>% 
+  ggplot(aes(y = hospital, fill = vital_status))+
+  geom_bar(position = "dodge")+
+  coord_flip()+
+  theme_bw()+
+  labs(y = "Treating hospital",
+       x = "Number of patients",
+       fill = "Vital status")+
+  scale_fill_startrek()+
+  theme(legend.position = "top",
+        panel.grid = element_blank())
+```
+
+If we wish to change the color theme to JAMA, we only have to add that single line of code to *plot_1*.
+
+```{r}
+plot_1 +
+  scale_fill_jama()
+```
+
+Continuous axes can be modified with two main arguments: `limits` which controls the upper and lower limit, and `breaks` which controls the size of breaks. Consider the following bar chart of extended resection for cancer versus postoperative complications. 
+
+```{r}
+plot_2 <- cancer %>% 
+  ggplot(aes(y = extended_resection, fill = postop_complication))+
+  geom_bar()+
+  theme_bw()+
+  labs(y = "Extended resection",
+       x = "Number of patients",
+       fill = "Postoperative complication")+
+  scale_fill_d3()+
+  theme(legend.position = "bottom",
+        panel.grid = element_blank())
+
+plot_2
+```
+
+If we wanted to modify the x-axis so the upper limit was 50, we would add the following. 
+
+```{r}
+plot_2+
+  scale_x_continuous(limits = c(0, 50))
+```
+
+If we would prefer breaks of 5, we can manually set the breaks. It is important to note, the values of `breaks` can be greater than the range set by `limits` but it cannot be smaller without suppressing some values on the axis. 
+
+```{r}
+plot_2+
+  scale_x_continuous(limits = c(0, 50),
+                     breaks = seq(0, 50, 5))
+```
+
+For example, if we inadvertently set the range of `breaks` smaller than `limits`. 
+
+```{r}
+plot_2+
+  scale_x_continuous(limits = c(0, 50),
+                     breaks = seq(0, 20, 5))
+```
+
+The piece of code `seq(0, 50, 5)` simply means create a sequence of values starting from 0 going to 50, increasing by 5. Observe the following examples of sequences. 
+
+```{r}
+seq(1, 10, 1)
+```
+
+```{r}
+seq(100, 200, 50)
+```
+
+This was an introduction to creating simple high-quality figures that may complement analyses performed with other statistical software. In later tutorials we will explore other common layers, such as `geom_line` and `geom_ribbon`. 
+
+https://github.com/mcas-surg/Tutorials
