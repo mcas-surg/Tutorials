@@ -1,0 +1,314 @@
+---
+title: 'Visualizing regression using caterpillar plots'
+author: "Matthew Castelo"
+date: "June, 2021"
+output:
+  pdf_document:
+    fig_caption: yes
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(formatR)
+library(knitr)
+knitr::opts_chunk$set(tidy = FALSE, 
+                      message = FALSE, warning = FALSE,
+                      out.width = "75%", fig.align = 'center')
+```
+
+Caterpillar plots can be an effective way to present regression parameters or estimates from multiple sensitivity analyses. This tutorial will demonstrate how to create these plots using **ggplot2** when regression is performed within R, or in another statistical software. 
+
+We will need to install the following packages. 
+
+```{r, eval = FALSE}
+install.packages("tidyverse")
+```
+
+As usual, we will load our packages and set the working directory. 
+
+```{r}
+library(tidyverse)
+library(ggsci)
+library(survival)
+library(broom)
+
+#The working directory saves the following path when loading files, saving plots, etc
+setwd("C:/Users/matth/Documents/R/R code and education/Tutorials/")
+```
+
+We will be working with a simulated dataset representing 80 generic cancer patients. The dataset can be loaded directly from GitHub so all the subsequent code will run on your computer. 
+
+```{r}
+url <- 
+  "https://raw.githubusercontent.com/mcas-surg/Tutorials/main/Datasets/generic_cancer.csv"
+
+cancer <- read_csv(url)
+```
+
+Suppose we were interested in performing a multivariable Cox proportional hazards model, including 5 covariates: sex, patient age, tumour grade, tumour size, and treating hospital. 
+The **survival** package requires our vital status variable to be binary. We will do this and save our new dataset as *cancer_surv*. 
+
+```{r}
+cancer_surv <- cancer %>% 
+  mutate(vital_status = ifelse(vital_status == "Died", 
+                                1, 0))
+```
+
+Now we can create the model. On the left side of the formula we pass variables indicating follow-up time and vital status. On the right side we pass our covariates of interest.
+
+```{r}
+cox_model <- coxph(Surv(follow_up, vital_status) ~ male + age + high_grade + 
+                     tumour_size + hospital,
+                   data = cancer_surv)
+
+summary(cox_model)
+```
+
+Ideally, we wish to present the hazard ratios and confidence intervals graphically. These values are located within the model object *cox_model*. The **broom** package conveniently converts model objects into datasets than we can manipulate directly. 
+
+In this case, we need to exponentiate the estimates, and we would like 95% confidence intervals. 
+
+```{r}
+tidy_model <- tidy(cox_model, 
+                   exponentiate = TRUE,
+                   conf.int = TRUE)
+
+tidy_model
+```
+
+Let's clean up our small dataset. We will rename the values in the "term" column, and only keep our hazard ratios and 95% confidence intervals. 
+
+```{r}
+tidy_model$term <- c("Male sex",
+                     "Older age (1 year)",
+                     "High grade tumour",
+                     "Larger tumour size (1 cm)",
+                     "Community hospital")
+
+tidy_model <- tidy_model %>% 
+  select(term, estimate, conf.low, conf.high)
+
+tidy_model
+```
+
+Now we can begin creating our plot. We will mainly use `geom_pointrange` and `geom_errorbar`, which together will demonstrate each hazard ratio and 95% CI. 
+
+First, starting simply.
+
+```{r}
+tidy_model %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size=0.5)
+```
+
+This is `geom_pointrange()` by itself. Here is how adding `geom_errorbar` changes the plot.
+
+```{r}
+tidy_model %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)
+```
+
+We should flip the plot vertically and add a line showing a HR = 1. 
+
+```{r}
+tidy_model %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()
+```
+
+This is already looking better. Next, we can remove the y-axis label, change the x-axis label, and adjust the theme. Remember, when we flip figures the axes don't change in the code. 
+
+```{r}
+tidy_model %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()+
+  labs(x = "",
+       y = "Adjusted hazard ratio and 95% confidence interval")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())
+```
+
+The figure would be improved by shifting the axis and breaks. 
+
+```{r}
+tidy_model %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()+
+  labs(x = "",
+       y = "Adjusted hazard ratio and 95% confidence interval")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  scale_y_continuous(limits = c(0, 3.5),
+                     breaks = seq(0, 3, 0.5))
+```
+
+It is also possible to add labels to the figure indicating the hazard ratio. Text can be added dynamically as a layer using `+geom_text()`. This layer requires you to provide labels. We will create our custom labels for each covariate. 
+
+First, we need to round the hazard ratios and confidence limits to 2 decimal places, and we will save these as new variables. 
+
+```{r}
+tidy_model_labels <- tidy_model %>% 
+  mutate(estimate_round = round(estimate, 2),
+         conf.low_round = round(conf.low, 2),
+         conf.high_round = round(conf.high, 2))
+```
+
+Now we can start building our labels. This will be shown over several steps so you can follow what each piece of code is doing.
+
+```{r}
+tidy_model_labels <- tidy_model_labels %>%
+  unite("custom_label", estimate_round, conf.low_round,
+        remove = TRUE,
+        sep = ", 95% CI ")
+```
+```{r, echo = FALSE}
+tidy_model_labels %>% 
+  select(custom_label)
+```
+
+The `unite()` function combines chosen columns in a character string, with a custom separator that you can specify. Here, we have combined the estimate and lower confidence limit with the string ", 95% CI " between. This has been saved to the new variable "custom_label". The `remove = TRUE` argument will delete the original combined columns. 
+
+We will continue and add the upper confidence limit. 
+
+```{r}
+tidy_model_labels <- tidy_model_labels %>% 
+  unite("custom_label", custom_label, conf.high_round,
+        remove = TRUE,
+        sep = "-")
+```
+```{r, echo = FALSE}
+tidy_model_labels %>% 
+  select(custom_label)
+```
+
+Finally, we can paste the string "HR " to the front of each label. 
+
+```{r}
+tidy_model_labels <- tidy_model_labels %>% 
+  mutate(custom_label = paste0("HR ", custom_label))
+```
+```{r, echo = FALSE}
+tidy_model_labels %>% 
+  select(custom_label)
+```
+
+In reality, all of these data steps could have been piped together to save time. This is what that would look like. 
+
+```{r, eval = FALSE}
+tidy_model_labels <- tidy_model %>% 
+  mutate(estimate_round = round(estimate, 2),
+         conf.low_round = round(conf.low, 2),
+         conf.high_round = round(conf.high, 2)) %>% 
+  unite("custom_label", estimate_round, conf.low_round,
+        remove = TRUE,
+        sep = ", 95% CI ") %>% 
+  unite("custom_label", custom_label, conf.high_round,
+        remove = TRUE,
+        sep = "-") %>% 
+  mutate(custom_label = paste0("HR ", custom_label)) 
+```
+
+Now, let's add these labels to our previous figure using `+geom_text()`. Note I am adding the labels aesthetic directly to `geom_text()`, but it could also have been added to the `ggplot()` statement at the top of the code. 
+
+```{r}
+tidy_model_labels %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()+
+  labs(x = "",
+       y = "Adjusted hazard ratio and 95% confidence interval")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  scale_y_continuous(limits = c(0, 3.5),
+                     breaks = seq(0, 3, 0.5))+
+  geom_text(aes(label = custom_label))
+```
+
+Unfortunately, `geom_text()` inherited the x and y coordinates in the `ggplot()` statement and the result is not very attractive. We can manually set these values to shift the text. We will also adjust the x-axis limits and breaks to add more space to the right side of the plot without extending the x-axis text. Look at the following code carefully. 
+
+```{r}
+tidy_model_labels %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()+
+  labs(x = "",
+       y = "Adjusted hazard ratio and 95% confidence interval")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  scale_y_continuous(limits = c(0, 5.5),
+                     breaks = seq(0, 3, 0.5))+
+  geom_text(aes(label = custom_label,
+                y = 3.2, hjust = 0))
+```
+
+This is looking better. For a final level of customization we can add a vertical line to give the appearance of a divide between the error bars and labels, and manually shift the x-axis title to the left so it remains centered. I will also increase the overall size of the text slightly. 
+
+```{r, out.width = "100%"}
+tidy_model_labels %>% 
+  ggplot(aes(x = term, 
+             y = estimate, ymin = conf.low, ymax = conf.high))+
+  geom_pointrange(size = 0.5)+
+  geom_errorbar(size = 1)+
+  geom_hline(yintercept = 1, linetype = 2, size = 1)+
+  coord_flip()+
+  labs(x = "",
+       y = "Adjusted hazard ratio and 95% confidence interval")+
+  theme_minimal()+
+  theme(panel.grid = element_blank())+
+  scale_y_continuous(limits = c(0, 6),
+                     breaks = seq(0, 3, 0.5))+
+  geom_text(aes(label = custom_label,
+                y = 3.5, hjust = 0))+
+  geom_hline(yintercept = 3.3)+
+  theme(axis.title.x = element_text(hjust = 0.1, vjust = -0.5),
+        text = element_text(size = 12))
+```
+
+Remember to save a publication-quality version of your plot. 
+
+```{r, eval = FALSE}
+#If you have not set the working directory, include the full file path
+ggsave("my_plot.png", 
+       dpi = 300, dev = "png",
+       height = 20, width = 25, units = "cm")
+```
+
+Although this example used hazard ratios from a model created in R, this plot can be easily replicated by manually creating an equivalent dataset from estimates given in another statistical software. Creating a .csv file with the following columns and importing this into R will provide an attractive method of presenting regression parameters. 
+
+```{r, echo = FALSE}
+tibble(term = c(""),
+       estimate = c(""),
+       conf.low = c(""),
+       conf.high = c(""),
+       custom_label = c("")) %>% 
+  kable()
+```
+
+Future tutorials will focus on more complex plots, including using colour and facets to distinguish several different analyses for the same parameter. 
+
+https://github.com/mcas-surg/Tutorials
