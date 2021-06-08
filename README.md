@@ -12,4 +12,6 @@ If you are having issues with permissions in RStudio when installing or updating
 
 Download Git: http://git-scm.com/download/win
 
-Instructions for enabling version control in RStudio: https://support.rstudio.com/hc/en-us/articles/200532077?version=1.4.1717&mode=desktop
+Instructions for enabling version control in RStudio:
+https://support.rstudio.com/hc/en-us/articles/200532077?version=1.4.1717&mode=desktop
+https://cfss.uchicago.edu/setup/git-with-rstudio/
