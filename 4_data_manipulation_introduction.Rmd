@@ -1,0 +1,206 @@
+---
+title: 'Data manipulation with dplyr'
+author: "Matthew Castelo"
+date: "June, 2021"
+output:
+  pdf_document:
+    fig_caption: yes
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(formatR)
+library(knitr)
+knitr::opts_chunk$set(tidy = FALSE, 
+                      message = FALSE, warning = FALSE,
+                      out.width = "75%", fig.align = 'center')
+```
+
+The **dplyr** package in the **Tidyverse** is an alternative grammar to base R for data manipulation. For those coming from SAS, it may be more intuitive, especially when combined with the pipe (%>%). 
+
+The main verbs or functions include: 
+```{r, eval = F}
+select() #include or exclude columns/variables
+filter() #include or exclude rows/observations
+
+mutate() #alter/add variables
+summarize() #reduce datasets to summary statistics
+rename() #change column/variable names
+
+arrange() #change the order of the dataset
+group_by() #perform operations by groups
+```
+
+Many of these functions are analogous to those in other statistical software. They will be briefly introduced with examples. 
+
+We will need to install the following packages. 
+
+```{r, eval = FALSE}
+install.packages("tidyverse")
+```
+
+As usual, we will load our packages and set the working directory. 
+
+```{r}
+library(tidyverse)
+
+#The working directory saves the following path when loading files, saving plots, etc
+setwd("C:/Users/matth/Documents/R/R code and education/Tutorials/")
+```
+
+We will be working with a simulated dataset representing 80 generic cancer patients. The dataset can be loaded directly from GitHub so all the subsequent code will run on your computer. 
+
+```{r}
+urlRemote  <- "https://raw.githubusercontent.com/"
+pathGithub <- "mcas-surg/Tutorials/main/Datasets/"
+fileName   <- "generic_cancer.csv"
+
+cancer <- read_csv(paste0(urlRemote, pathGithub, fileName))
+```
+
+The first few rows and data structure can be seen. 
+```{r}
+head(cancer)
+```
+
+# The `select()` verb
+
+`select()` will include or exclude columns/variables. If we only want the *male* variable.
+```{r}
+cancer %>% 
+  select(male)
+```
+
+Note this simply prints the resulting dataset. If we want to save this selection to a new dataset, we should pass a new dataset name.
+
+```{r}
+cancer_only_sex <- cancer %>% 
+  select(male)
+```
+
+If we would like to keep only the *male* and *age* variables, multiple columns can be given to `select()`. 
+
+```{r}
+cancer %>% 
+  select(male, age)
+```
+
+We can also ask to keep a range of variables.
+```{r}
+cancer %>% 
+  select(male:high_grade)
+```
+
+Removing columns works in much the same way, except using a `-` sign. 
+
+```{r, eval = F}
+cancer %>% 
+  select(-male, -age, -hospital)
+
+#Instead of putting a "-" sign in front of each variable, we can use the following notation
+
+cancer %>%
+  select(-c(male, age, hospital))
+```
+ 
+It is often convenient to select based on the common naming of variables. Say we have a dataset of bloodwork with the following form. 
+
+```{r, echo=F}
+blood_example <- tibble(pt_id = 1:10,
+                        cbc_hb = rnorm(n=10, mean=135, sd=15),
+                        cbc_leuk = rnorm(n=10, mean=8, sd=3),
+                        cbc_plt = rnorm(n=10, mean=215, sd=50),
+                        lft_alt = rnorm(n=10, mean=45, sd=5),
+                        lft_bili_tot = rnorm(n=10, mean=8, sd=1),
+                        lft_bili_dir = rnorm(n=10, mean=5, sd=1),
+                        vbg_ph = round(rnorm(n=10, mean=6.9, sd=0.3), 1)) %>% 
+  mutate(across(-c(pt_id, vbg_ph), function(x) round(x, 0)))
+
+print(blood_example)
+```
+
+Notice the values for hemoglobin, white blood cell count, and platelet all begin with "cbc". We can select just those using `starts_with()`. 
+
+```{r}
+blood_example %>% 
+  select(starts_with("cbc"))
+```
+
+If we want to keep the *pt_id* variable as well.
+
+```{r}
+blood_example %>% 
+  select(pt_id,
+         starts_with("cbc"))
+```
+
+Also note the liver enzyme variables begin with "lft". We can pass multiple strings to `starts_with()`.
+
+```{r}
+blood_example %>% 
+  select(starts_with(c("cbc", "lft")))
+```
+
+You can imagine situations where the number of strings may be quite large to select. To avoid the code becoming too cluttered, you can assign the strings to a vector and pass that to `starts_with()`. The following is equivalent to what we just did.
+
+```{r}
+vars_wanted <- c("cbc", "lft")
+
+blood_example %>% 
+  select(starts_with(vars_wanted))
+```
+
+If we wanted just the two bilirubin values and used `starts_with()` we would also select for *lft_alt*. We can use `contains()` instead.
+
+```{r}
+blood_example %>% 
+  select(contains("bili"))
+```
+
+Even more complex selecting can be achieved. To select variables based on logical statements we can use `where()`. For example, to keep only numeric variables. 
+
+```{r}
+cancer %>% 
+  select(where(is.numeric))
+```
+```{r, eval = F}
+#This obviously extends to 
+cancer %>% 
+  select(where(is.character))
+
+#And
+cancer %>% 
+  select(where(is.factor))
+```
+
+`where()` can be used in even more complex situations. Say we have 10 patient's systolic blood pressure across multiple visits, where in each visit a different pain strategy was used for a painful procedure.
+
+```{r, echo = F}
+bp_example <- tibble(pt_id = 1:10,
+                     visit_1 = rnorm(n = 10, mean = 120, sd = 5),
+                     visit_2 = rnorm(n = 10, mean = 115, sd = 5),
+                     visit_3 = rnorm(n = 10, mean = 123, sd = 5),
+                     visit_4 = rnorm(n = 10, mean = 145, sd = 5),
+                     visit_5 = rnorm(n = 10, mean = 155, sd = 5)) %>% 
+  mutate(across(starts_with("visit"), function(x) round(x, 0)))
+
+print(bp_example)
+```
+
+If we wanted to keep only the patient ID and visits where the mean blood pressure is greater than 130 (perhaps suggesting the pain management in those visits was suboptimal), a `where()` solution would be. 
+
+```{r}
+bp_example %>% 
+  select(pt_id,
+         starts_with("visit") & where(function(x) mean(x)>130))
+```
+
+
+
+
+
+
+
